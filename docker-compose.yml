@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-apple_store}
+      POSTGRES_USER: ${DB_USER:-apple_bot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-apple_bot_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

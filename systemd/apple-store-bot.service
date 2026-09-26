@@ -1,0 +1,19 @@
+[Unit]
+Description=Apple Store Telegram Bot
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=botuser
+Group=botuser
+WorkingDirectory=/opt/appleid-bot
+EnvironmentFile=/opt/appleid-bot/.env
+ExecStart=/opt/appleid-bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
