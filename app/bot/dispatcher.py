@@ -41,6 +41,7 @@ def register_all_routers(dp: Dispatcher) -> None:
     from app.handlers.admin import payments as admin_payments
     from app.handlers.admin import products as admin_products
     from app.handlers.admin import referrals as admin_referrals
+    from app.handlers.admin import scheduler_health as admin_scheduler_health
     from app.handlers.admin import settings as admin_settings
     from app.handlers.admin import statistics as admin_statistics
     from app.handlers.admin import support as admin_support
@@ -80,6 +81,7 @@ def register_all_routers(dp: Dispatcher) -> None:
     dp.include_router(admin_support.router)
     dp.include_router(admin_referrals.router)
     dp.include_router(admin_statistics.router)
+    dp.include_router(admin_scheduler_health.router)
     dp.include_router(admin_settings.router)
     dp.include_router(admin_admins.router)
     dp.include_router(admin_unlock.router)

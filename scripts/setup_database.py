@@ -12,6 +12,7 @@ from pathlib import Path
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+os.chdir(project_root)  # so .env / alembic.ini resolve from any cwd
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
@@ -88,7 +89,8 @@ async def run_migrations():
     alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url_final)
 
     try:
-        command.upgrade(alembic_cfg, "head")
+        # alembic/env.py calls asyncio.run() internally -> must not be inside a live loop
+        await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
         print("Migrations completed successfully!")
     except Exception as e:
         print(f"Error running migrations: {e}")

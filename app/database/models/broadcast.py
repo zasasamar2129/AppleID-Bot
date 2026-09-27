@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -30,6 +30,14 @@ class Broadcast(Base):
 
 class BroadcastReceipt(Base):
     __tablename__ = "broadcast_receipts"
+    # One receipt per (broadcast, user): this is what makes a resumed
+    # broadcast skip users it already delivered to, and what makes a duplicate
+    # run a no-op instead of a duplicate message.
+    __table_args__ = (
+        UniqueConstraint(
+            "broadcast_id", "user_id", name="uq_broadcast_receipts_broadcast_user"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     broadcast_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("broadcasts.id"), index=True)

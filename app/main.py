@@ -21,7 +21,7 @@ class ColoredFormatter(logging.Formatter):
         logging.INFO: "\033[32m",       # Green
         logging.WARNING: "\033[33m",    # Yellow
         logging.ERROR: "\033[31m",      # Red
-        logging.CRITICAL: "\033[1;31m", # Bold red
+        logging.CRITICAL: "\033[1;31m",  # Bold red
     }
     RESET = "\033[0m"
 
@@ -43,6 +43,7 @@ root_logger.addHandler(handler)
 
 # Suppress noisy loggers
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
+logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 logging.getLogger("aiogram").setLevel(logging.WARNING)
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
@@ -75,12 +76,22 @@ async def on_startup():
     from app.services.channel_membership_service import ChannelMembershipService
     await ChannelMembershipService(bot).check_channel_access()
 
-    setup_scheduler()
+    # setup_scheduler is async (it takes the Redis singleton lock) and returns
+    # False when another process already owns the scheduler. In that case this
+    # process still serves Telegram updates, it just does not schedule jobs.
+    scheduler_started = await setup_scheduler()
+    if not scheduler_started:
+        logger.warning(
+            "Scheduler not started in this process (another instance owns it). "
+            "Bot will still handle updates."
+        )
     logger.info("Bot started")
 
 
 async def on_shutdown():
-    shutdown_scheduler()
+    # Stop the scheduler first and let in-flight jobs finish, so a payment
+    # verification is never killed mid-transaction.
+    await shutdown_scheduler()
     await bot.session.close()
     await redis_client.aclose()
     await engine.dispose()

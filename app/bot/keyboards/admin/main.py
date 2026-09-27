@@ -40,6 +40,13 @@ def admin_main_keyboard(lang: str = "fa") -> InlineKeyboardMarkup:
         style="primary"
     ))
 
+    # Scheduler health (full width) — admins only, never shown to customers.
+    kb.add(InlineKeyboardButton(
+        text="🛠 Scheduler Health",
+        callback_data="admin:scheduler_health",
+        style="primary"
+    ))
+
     # Back and Close stacked vertically
     kb.add(InlineKeyboardButton(
         text=get_text("common.back", lang),
@@ -51,6 +58,7 @@ def admin_main_keyboard(lang: str = "fa") -> InlineKeyboardMarkup:
         style="danger"
     ))
 
-    # Layout: two columns for sections, then single column for audit, back, close
-    kb.adjust(2, 2, 2, 2, 2, 2, 2, 1, 1, 1)
+    # Layout: two columns for sections, then single column for audit,
+    # scheduler health, back, close
+    kb.adjust(2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1)
     return kb.as_markup()
