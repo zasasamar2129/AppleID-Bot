@@ -65,9 +65,12 @@ async def parse_formatted_text(message: Message, state: FSMContext, session: Asy
     email = re.search(r"🍏\s*(.+)", text)
     password = re.search(r"🗝\s*(.+)", text)
     dob = re.search(r"📅\s*(.+)", text)
-    school = re.search(r"🧍‍♂️School\s*:\s*(.+)", text)
-    job = re.search(r"👨‍⚕️job\s*:\s*(.+)", text)
-    parents_meet = re.search(r"🌆\s*parentsmeet\s*:\s*(.+)", text)
+    school = re.search(r"🧍‍♂️\s*School\s*:\s*(.+)", text, re.IGNORECASE)
+    pet = re.search(r"🧍‍♂️\s*Pet\s*:\s*(.+)", text, re.IGNORECASE)
+    job = re.search(r"👨‍⚕️\s*Job\s*:\s*(.+)", text, re.IGNORECASE)
+    parents_meet = re.search(
+        r"🌆\s*Parents\s*(?:Meet|meet)\s*:\s*(.+)", text, re.IGNORECASE
+    )
 
     if not email or not password:
         await message.answer(get_text("admin.inventory.invalid_format", lang))
@@ -77,6 +80,7 @@ async def parse_formatted_text(message: Message, state: FSMContext, session: Asy
         "password": password.group(1).strip(),
         "date_of_birth": dob.group(1).strip() if dob else "",
         "school": school.group(1).strip() if school else "",
+        "pet": pet.group(1).strip() if pet else "",
         "job": job.group(1).strip() if job else "",
         "parents_meet": parents_meet.group(1).strip() if parents_meet else "",
     }
@@ -86,10 +90,14 @@ async def parse_formatted_text(message: Message, state: FSMContext, session: Asy
         preview += f"📅 DOB: {data['date_of_birth']}\n"
     if data["school"]:
         preview += f"🧍‍♂️ School: {data['school']}\n"
+    if data["pet"]:
+        preview += f"🧍‍♂️ Pet: {data['pet']}\n"
     if data["job"]:
         preview += f"👨‍⚕️ Job: {data['job']}\n"
     if data["parents_meet"]:
-        preview += f"🌆 Parents Meet: {data['parents_meet']}\n"
+        preview += (
+            f"🌆 Parents Meet: {data['parents_meet']}\n"
+        )
     await state.update_data(inventory_data=data)
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Save Apple ID", callback_data="admin:inventory:save")
@@ -113,6 +121,7 @@ async def save_inventory(callback: CallbackQuery, state: FSMContext, session: As
         fulfillment_data={
             "date_of_birth": inv_data["date_of_birth"],
             "school": inv_data["school"],
+            "pet": inv_data["pet"],
             "job": inv_data["job"],
             "parents_meet": inv_data["parents_meet"],
         },
@@ -220,8 +229,11 @@ async def inventory_bulk_parse(message: Message, state: FSMContext, session: Asy
         m_pass = re.search(r"🗝\s*(.+)", line)
         m_dob = re.search(r"📅\s*(.+)", line)
         m_school = re.search(r"School\s*:\s*(.+)", line, re.IGNORECASE)
+        m_pet = re.search(r"Pet\s*:\s*(.+)", line, re.IGNORECASE)
         m_job = re.search(r"job\s*:\s*(.+)", line, re.IGNORECASE)
-        m_parents = re.search(r"parentsmeet\s*:\s*(.+)", line, re.IGNORECASE)
+        m_parents = re.search(
+            r"Parents\s*(?:Meet|meet)\s*:\s*(.+)", line, re.IGNORECASE
+        )
 
         if m_email:
             # A new email starts a new account; save the previous one first.
@@ -234,6 +246,8 @@ async def inventory_bulk_parse(message: Message, state: FSMContext, session: Asy
             current["date_of_birth"] = m_dob.group(1).strip()
         elif m_school:
             current["school"] = m_school.group(1).strip()
+        elif m_pet:
+            current["pet"] = m_pet.group(1).strip()
         elif m_job:
             current["job"] = m_job.group(1).strip()
         elif m_parents:
@@ -247,7 +261,7 @@ async def inventory_bulk_parse(message: Message, state: FSMContext, session: Asy
     added = 0
     for acc in accounts:
         fulfillment_data = {}
-        for key in ("date_of_birth", "school", "job", "parents_meet"):
+        for key in ("date_of_birth", "school", "pet", "job", "parents_meet"):
             if acc.get(key):
                 fulfillment_data[key] = acc[key]
         account_data = {"email": acc["email"], "password": acc["password"]}
