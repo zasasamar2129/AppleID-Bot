@@ -48,17 +48,22 @@ async def process_paid_orders_job() -> int:
 
             # Atomically claim one AVAILABLE unit. The WHERE clause is the
             # concurrency guard: a parallel worker cannot match the same row.
-            claimed = await session.execute(
-                update(Inventory)
+            # UPDATE has no LIMIT in PostgreSQL, so pick the id in a subquery.
+            candidate_inv = (
+                select(Inventory.id)
                 .where(
                     and_(
                         Inventory.product_id == order.product_id,
                         Inventory.status == InventoryStatus.AVAILABLE,
                     )
                 )
-                .values(status=InventoryStatus.SOLD, sold_at=now, updated_at=now)
                 .order_by(Inventory.created_at)
                 .limit(1)
+            )
+            claimed = await session.execute(
+                update(Inventory)
+                .where(Inventory.id == candidate_inv)
+                .values(status=InventoryStatus.SOLD, sold_at=now, updated_at=now)
                 .returning(Inventory.id)
             )
             inventory_id = claimed.scalar_one_or_none()

@@ -43,11 +43,13 @@ async def process_broadcasts_job() -> int:
     sent = 0
     async with async_session() as session:
         # 1. Claim a broadcast atomically: queued -> in_progress. A parallel
-        #    run sees 0 rows and moves on.
+        #    run sees 0 rows and moves on. UPDATE has no LIMIT in PostgreSQL,
+        #    so restrict the update to the single oldest eligible id via a
+        #    subquery.
         now = datetime.utcnow()
         stale_before = now - _stale_delta()
-        claim = await session.execute(
-            update(Broadcast)
+        eligible = (
+            select(Broadcast.id)
             .where(
                 or_(
                     Broadcast.status == "queued",
@@ -60,9 +62,14 @@ async def process_broadcasts_job() -> int:
                     ),
                 )
             )
+            .order_by(Broadcast.created_at)
+            .limit(1)
+        )
+        claim = await session.execute(
+            update(Broadcast)
+            .where(Broadcast.id == eligible)
             .values(status="in_progress", started_at=now)
             .returning(Broadcast.id)
-            .limit(1)
         )
         broadcast_id = claim.scalar_one_or_none()
         if broadcast_id is None:
