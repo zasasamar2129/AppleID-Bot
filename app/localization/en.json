@@ -1,6 +1,6 @@
 {
-  "channel.access_required": "🔒 Access Restricted\n\nTo use this bot, you must first join our channel.\n\n📢 Our Channel:\n@mobilemeisam2\n\nAfter joining, tap “✅ Check Membership”.",
-  "channel.join": "📢 Join Channel",
+  "channel.access_required": "👋 Hello! To use this bot, you first need to join our channel, <a href=\"https://t.me/mobilemeisam2\">Avalsim</a>.\n\nBy joining, you'll stay updated with the latest news and guides.\n\nAfter joining, tap the button below to activate your access:",
+  "channel.join": "📢 Join Avalsim",
   "channel.check_membership": "✅ Check Membership",
   "channel.not_member": "❌ You haven't joined the channel yet.\n\nFirst join the channel, then tap “Check Membership” again.",
   "channel.verified": "✅ Your membership has been verified.",
@@ -477,7 +477,7 @@
   "unlock.enter_apple_id_email": "📧 Enter your Apple ID email address:",
   "unlock.invalid_email": "⚠️ Invalid email.\n\nPlease send the email address connected to this Apple ID again.",
   "unlock.enter_phone_number": "📱 Enter your phone number:",
-  "unlock.invalid_phone": "Invalid phone number. Please try again.",
+  "unlock.invalid_phone": "⚠️ Invalid phone number.\n\nPlease send a valid phone number again.",
   "unlock.has_credentials": "🔑 Do you have access to your Apple ID credentials?\n(e.g. password, security questions)",
   "unlock.yes": "Yes",
   "unlock.no": "No",
@@ -505,7 +505,6 @@
   "unlock.other_locked_question": "📱 Is any other iPhone also locked with this Apple ID?",
   "unlock.additional_info": "📝 Additional information\n\nIf you have any extra details about the device or Apple ID, send them here.\n\nIf you don’t have anything else to add, tap “Skip”.",
   "unlock.enter_phone": "📞 Enter your phone number:\n\nSo we can contact you for coordination and follow-up.\n\nExample: +989123456789",
-  "unlock.invalid_phone": "⚠️ Invalid phone number.\n\nPlease send a valid phone number again.",
   "unlock.summary_phone": "Phone number",
   "unlock.edit_phone": "Phone number",
   "unlock.invalid_imei": "⚠️ Invalid IMEI.\n\nPlease send the 15-digit iPhone IMEI again.",
@@ -596,5 +595,10 @@
   "unlock_admin.payment.paid": "Paid",
   "unlock_admin.payment.failed": "Failed",
   "unlock.has_access": "I have access",
-  "unlock.no_access": "I don't have access"
+  "unlock.no_access": "I don't have access",
+  "admin.support.list_title": "🏧 Support tickets",
+  "admin.support.no_tickets": "No tickets found.",
+  "admin.support.enter_reply": "Enter your reply:",
+  "admin.support.reply_sent": "Reply sent.",
+  "admin.support.no_admin_record": "No admin record found for your account."
 }

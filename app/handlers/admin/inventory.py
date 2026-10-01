@@ -2,11 +2,12 @@ import re
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters.admin import IsAdmin
+from app.database.models.inventory import Inventory
 from app.database.repositories.inventory_repo import InventoryRepository
 from app.database.repositories.product_repo import ProductRepository
 from app.localization import get_text
@@ -143,25 +144,163 @@ async def cancel_inventory(callback: CallbackQuery, state: FSMContext, lang="fa"
 
 
 # ---------- View Inventory ----------
+INV_STATUS_ICON = {
+    "available": "🟢",
+    "reserved": "🟡",
+    "sold": "🔴",
+    "disabled": "⚪",
+}
+
+# Human labels for the fulfillment fields the supplier format produces.
+_FULFILLMENT_LABELS = {
+    "date_of_birth": "📅 Date of Birth",
+    "school": "🧍‍♂️ School",
+    "pet": "🧍‍♂️ Pet",
+    "job": "👨‍⚕️ Job",
+    "parents_meet": "🌆 Parents Meet",
+    "notes": "📝 Notes",
+}
+
+PAGE_SIZE = 10
+
+
 @router.callback_query(F.data == "admin:inventory:list")
 async def inventory_list(callback: CallbackQuery, session: AsyncSession, lang="fa"):
+    await _render_inventory_page(callback, session, page=0, lang=lang)
+
+
+@router.callback_query(F.data.startswith("admin:inventory:list:"))
+async def inventory_list_page(callback: CallbackQuery, session: AsyncSession, lang="fa"):
+    """Paginated inventory list. Callback format: admin:inventory:list:<page>."""
+    page = int(callback.data.rsplit(":", 1)[1])
+    await _render_inventory_page(callback, session, page=page, lang=lang)
+
+
+async def _render_inventory_page(
+    callback: CallbackQuery, session: AsyncSession, page: int = 0, lang: str = "fa"
+):
     repo = InventoryRepository(session)
-    items = await repo.get_all(limit=50)
+    offset = page * PAGE_SIZE
+    items = await repo.get_all(limit=PAGE_SIZE, offset=offset)
     if not items:
-        await callback.message.edit_text(get_text("admin.inventory.no_inventory", lang, default="No inventory found."))
+        if page == 0:
+            kb_empty = InlineKeyboardBuilder()
+            kb_empty.button(
+                text="⬅️ " + get_text("common.back", lang),
+                callback_data="admin:inventory",
+            )
+            kb_empty.adjust(1)
+            await callback.message.edit_text(
+                get_text(
+                    "admin.inventory.no_inventory", lang, default="No inventory found."
+                ),
+                reply_markup=kb_empty.as_markup(),
+            )
         await callback.answer()
         return
 
-    text = "📋 " + get_text("admin.inventory", lang) + "\n\n"
+    text = f"📋 Inventory (page {page + 1})\n\n"
+    kb = InlineKeyboardBuilder()
     for inv in items:
-        status = inv.status.value.upper()
-        status_icon = "🟢" if inv.status.value == "available" else ("🟡" if inv.status.value == "reserved" else "🔴")
+        icon = INV_STATUS_ICON.get(inv.status.value, "•")
         product_name = inv.product.name if inv.product else f"#{inv.product_id}"
-        text += f"{status_icon} {product_name} | {status} | #{inv.id}\n"
+        text += f"{icon} #{inv.id} · {product_name} · {inv.status.value}\n"
+        kb.button(
+            text=f"#{inv.id} — {product_name}",
+            callback_data=f"admin:inventory:view:{inv.id}",
+        )
+    kb.adjust(1)
+
+    # Pagination row.
+    if page > 0:
+        kb.row(
+            InlineKeyboardButton(text="⬅️", callback_data=f"admin:inventory:list:{page - 1}")
+        )
+        if len(items) == PAGE_SIZE:
+            kb.row(
+                InlineKeyboardButton(
+                    text="➡️", callback_data=f"admin:inventory:list:{page + 1}"
+                )
+            )
+        else:
+            kb.row(
+                InlineKeyboardButton(text="➡️", callback_data="noop"),
+            )
+    elif len(items) == PAGE_SIZE:
+        kb.row(
+            InlineKeyboardButton(text="➡️", callback_data=f"admin:inventory:list:{page + 1}")
+        )
+
+    kb.row(
+        InlineKeyboardButton(text="➕ Add", callback_data="admin:inventory:add"),
+        InlineKeyboardButton(text="📥 Bulk", callback_data="admin:inventory:bulk"),
+        InlineKeyboardButton(text="🏠 Menu", callback_data="admin:inventory"),
+    )
+
+    await callback.message.edit_text(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:inventory:view:"))
+async def inventory_view_detail(callback: CallbackQuery, session: AsyncSession, lang="fa"):
+    """Show one inventory item with decrypted account and fulfillment data."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    inv_id = int(callback.data.rsplit(":", 1)[1])
+    # Load the inventory WITH its product so `inv.product` is available
+    # without triggering a lazy load (which would fail on the event loop).
+    stmt = select(Inventory).options(selectinload(Inventory.product)).where(Inventory.id == inv_id)
+    result = await session.execute(stmt)
+    inv = result.scalar_one_or_none()
+    if not inv:
+        await callback.answer("Not found", show_alert=True)
+        return
+
+    inventory_service = InventoryService(session)
+    account = await inventory_service.decrypt_inventory(inv)
+    fulfillment = await inventory_service.get_fulfillment_data(inv)
+
+    icon = INV_STATUS_ICON.get(inv.status.value, "•")
+    product_name = inv.product.name if inv.product else f"#{inv.product_id}"
+
+    text = f"{icon} Inventory #{inv.id}\n\n"
+    text += f"Product: {product_name}\n"
+    text += f"Status: {inv.status.value}\n"
+    if inv.region:
+        text += f"Region: {inv.region}\n"
+    if inv.internal_notes:
+        text += f"📝 Notes: {inv.internal_notes}\n"
+
+    text += "\n── Account ──\n"
+    if account:
+        text += f"📧 {account.get('email', '—')}\n"
+        text += f"🔑 {account.get('password', '—')}\n"
+    else:
+        text += "(could not decrypt)\n"
+
+    if fulfillment:
+        text += "\n── Fulfillment ──\n"
+        for key, value in fulfillment.items():
+            if value in (None, ""):
+                continue
+            label = _FULFILLMENT_LABELS.get(key, key.replace("_", " ").title())
+            text += f"{label}: {value}\n"
+
+    text += "\n── Timeline ──\n"
+    text += f"Created: {inv.created_at:%Y-%m-%d %H:%M} UTC\n"
+    if inv.reserved_at:
+        text += f"Reserved: {inv.reserved_at:%Y-%m-%d %H:%M} UTC\n"
+    if inv.reservation_expires_at:
+        text += f"Expires: {inv.reservation_expires_at:%Y-%m-%d %H:%M} UTC\n"
+    if inv.sold_at:
+        text += f"Sold: {inv.sold_at:%Y-%m-%d %H:%M} UTC\n"
 
     kb = InlineKeyboardBuilder()
-    kb.button(text="⬅️ " + get_text("common.back", lang), callback_data="admin:inventory")
+    kb.button(text="⬅️ Back to list", callback_data="admin:inventory:list:0")
+    kb.button(text="🏠 Inventory menu", callback_data="admin:inventory")
     kb.adjust(1)
+
     await callback.message.edit_text(text, reply_markup=kb.as_markup())
     await callback.answer()
 
@@ -192,7 +331,12 @@ async def inventory_bulk_select_product(callback: CallbackQuery, state: FSMConte
         get_text(
             "admin.inventory.bulk_prompt",
             lang,
-            default="Send multiple Apple ID accounts. One per line, in this format:\n\n🍏 email\n🗝 password\n\nYou may repeat the emoji lines for each account (one blank line between accounts)."
+            default=(
+                "Send multiple Apple ID accounts. One per line, "
+                "in this format:\n\n🍏 email\n🗝 password\n\n"
+                "You may repeat the emoji lines for each account "
+                "(one blank line between accounts)."
+            )
         )
     )
     await state.set_state(AdminInventoryStates.BULK_UPLOAD)
@@ -281,5 +425,12 @@ async def inventory_bulk_parse(message: Message, state: FSMContext, session: Asy
         metadata={"count": added},
     )
 
-    await message.answer(get_text("admin.inventory.bulk_added", lang, count=added, default=f"✅ Added {added} Apple ID(s)."))
+    await message.answer(
+        get_text(
+            "admin.inventory.bulk_added",
+            lang,
+            count=added,
+            default=f"✅ Added {added} Apple ID(s).",
+        )
+    )
     await state.clear()

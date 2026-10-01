@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -9,9 +10,9 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 from app.bot.bot import bot
 from app.bot.keyboards.channel import membership_gate_keyboard, membership_gate_text
 from app.config import settings
-from app.localization import get_text
 from app.services.channel_membership_service import ChannelMembershipService
-from app.utils.message_manager import MessageCleanupService
+
+logger = logging.getLogger(__name__)
 
 
 class ChannelMembershipMiddleware(BaseMiddleware):
@@ -20,12 +21,36 @@ class ChannelMembershipMiddleware(BaseMiddleware):
     Runs on every update (start, callbacks, FSM steps, old keyboards). Admins
     bypass via the existing RBAC (env ADMIN_IDS + admin_users table). Blocks by
     early-returning before the handler, mirroring MaintenanceMiddleware.
+
+    Invariant: a non-member always receives *some* reply. If the membership check
+    or the gate render fails (Redis down, Telegram API error, network hiccup), we
+    fall back to sending the gate directly rather than propagating — propagating
+    produced total silence, which is indistinguishable to the user from being
+    blocked and is invisible to the operator beyond a single log line.
     """
 
     def __init__(self) -> None:
         self.service = ChannelMembershipService(bot)
 
     async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        try:
+            return await self._handle(handler, event, data)
+        except Exception:
+            # Fail CLOSED: an unverifiable user is treated as a non-member.
+            # Failing open would grant access we could not verify.
+            logger.exception(
+                "Membership gate failed for user_id=%s; failing closed",
+                getattr(data.get("event_from_user"), "id", None),
+            )
+            await self._send_gate_directly(event, data)
+            return None
+
+    async def _handle(
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
         event: TelegramObject,
@@ -51,6 +76,7 @@ class ChannelMembershipMiddleware(BaseMiddleware):
         if await self.service.is_member(user_id):
             return await handler(event, data)
 
+        logger.info("Blocking non-member user_id=%s", user_id)
         # Not a member: block and show the membership gate.
         lang = data.get("lang", settings.default_language)
 
@@ -60,11 +86,29 @@ class ChannelMembershipMiddleware(BaseMiddleware):
             try:
                 await fsm_context.clear()
             except Exception:
-                pass
+                logger.debug("Could not clear FSM state for non-member", exc_info=True)
+
+        await self._render_gate(event, lang)
+
+        # Blocked: do not call the handler.
+        return None
+
+    async def _render_gate(self, event: TelegramObject, lang: str) -> None:
+        """Show the gate via MessageCleanupService (preferred path)."""
+        from app.utils.message_manager import MessageCleanupService
+
+        # Extract actual content if wrapped in an Update object
+        from aiogram.types import Update
+        if isinstance(event, Update):
+            event = event.message or (event.callback_query.message if event.callback_query else None)
+
+        if not event:
+            logger.warning("Could not render gate: no message/callback found in Update.")
+            return
+
+        logger.info("Rendering gate for event type: %s", type(event))
 
         if isinstance(event, Message):
-            # `/start` deletes its own message; still render the gate via
-            # show_screen (edits if the last UI exists, else sends fresh).
             await MessageCleanupService.show_screen(
                 chat_id=event.chat.id,
                 text=membership_gate_text(lang),
@@ -78,10 +122,52 @@ class ChannelMembershipMiddleware(BaseMiddleware):
                 reply_markup=membership_gate_keyboard(lang),
                 force_new=True,
             )
+        else:
+            logger.warning("Could not render gate: event is not Message or CallbackQuery with message.")
+
+
+    async def _send_gate_directly(self, event: TelegramObject, data: dict[str, Any]) -> None:
+        """Last-resort gate render that bypasses Redis/DB entirely.
+
+        ``membership_gate_text`` / ``membership_gate_keyboard`` are pure functions
+        over settings and static localization, so this still works when the very
+        dependency that broke (Redis, the DB, the cleanup service) is unavailable.
+
+        Uses ``bot.send_message`` rather than ``event.answer`` because a
+        TelegramMethod built off the event is not bound to a bot instance and
+        raises ``RuntimeError`` when awaited directly — the same reason the rest
+        of the project sends via the bot.
+        """
+        lang = data.get("lang", settings.default_language)
+        text = membership_gate_text(lang)
+        markup = membership_gate_keyboard(lang)
+
+        from aiogram.types import Update
+        if isinstance(event, Update):
+            event = event.message or (event.callback_query.message if event.callback_query else None)
+
+        chat_id: int | None = None
+        if isinstance(event, Message):
+            chat_id = event.chat.id
+        elif isinstance(event, CallbackQuery) and event.message:
+            chat_id = event.message.chat.id
+
+        if chat_id is None:
+            return
+
+        try:
+            await bot.send_message(
+                chat_id=chat_id, text=text, reply_markup=markup
+            )
+        except Exception:
+            # Nothing further we can do; the failure is already logged above.
+            logger.exception("Emergency membership gate could not be delivered")
+            return
+
+        # Always answer the callback so the button stops spinning, even if the
+        # gate itself could not be rendered.
+        if isinstance(event, CallbackQuery):
             try:
                 await event.answer()
             except Exception:
-                pass
-
-        # Blocked: do not call the handler.
-        return
+                logger.debug("Could not answer callback in gate fallback", exc_info=True)

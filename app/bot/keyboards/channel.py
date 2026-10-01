@@ -18,14 +18,12 @@ def membership_gate_keyboard(lang: str = "fa") -> InlineKeyboardMarkup:
     kb.add(button(
         get_text("channel.join", lang),
         url=settings.required_channel_url,
-        emoji_key="apple",
         lang=lang,
     ))
     kb.add(button(
         get_text("channel.check_membership", lang),
         callback_data="channel:check",
         style="success",
-        emoji_key="success",
         lang=lang,
     ))
     kb.adjust(1)

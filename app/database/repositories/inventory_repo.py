@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models.enums import InventoryStatus
 from app.database.models.inventory import Inventory
@@ -13,7 +14,14 @@ class InventoryRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, product_id: int, encrypted_account: str, encrypted_fulfillment: str | None = None, region: str | None = None, notes: str | None = None) -> Inventory:
+    async def create(
+        self,
+        product_id: int,
+        encrypted_account: str,
+        encrypted_fulfillment: str | None = None,
+        region: str | None = None,
+        notes: str | None = None,
+    ) -> Inventory:
         inv = Inventory(
             product_id=product_id,
             region=region,
@@ -92,8 +100,10 @@ class InventoryRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_all(self, status: InventoryStatus | None = None, limit: int = 100, offset: int = 0) -> list[Inventory]:
-        stmt = select(Inventory)
+    async def get_all(
+        self, status: InventoryStatus | None = None, limit: int = 100, offset: int = 0
+    ) -> list[Inventory]:
+        stmt = select(Inventory).options(selectinload(Inventory.product))
         if status:
             stmt = stmt.where(Inventory.status == status)
         stmt = stmt.order_by(Inventory.created_at.desc()).limit(limit).offset(offset)

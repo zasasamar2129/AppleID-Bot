@@ -15,6 +15,7 @@ from app.handlers.price_inquiry import router as price_inquiry_router
 def register_all_routers(dp: Dispatcher) -> None:
     # Import and include routers
     from app.handlers import (
+        blocked_user,
         channel,
         coupons,
         errors,
@@ -66,6 +67,9 @@ def register_all_routers(dp: Dispatcher) -> None:
     dp.include_router(price_inquiry_router)
     dp.include_router(unlock.router)
     dp.include_router(tutorial.router)
+    # Block/unblock bookkeeping. Registered with the other user routers so the
+    # my_chat_member event type is resolved for getUpdates.
+    dp.include_router(blocked_user.router)
     dp.include_router(admin_price_inquiry_router)
 
     # Admin routers
@@ -89,12 +93,24 @@ def register_all_routers(dp: Dispatcher) -> None:
 
 
 def setup_middlewares(dp: Dispatcher) -> None:
+    # Membership guard runs FIRST, deliberately.
+    #
+    # It only needs settings, localization and the Telegram API, yet it used to
+    # sit behind DatabaseMiddleware and UserMiddleware — both of which touch the
+    # database. A brand-new user's first /start triggers an INSERT in
+    # UserMiddleware, so with any database problem the update died before the
+    # "join our channel" prompt could ever be sent: total silence, which is the
+    # worst possible failure for the one message the bot most needs to send.
+    #
+    # Running it first means a non-member is stopped before any DB work, and it
+    # needs neither data["session"] nor data["db_user"] (is_admin falls back to
+    # settings.admin_ids_list).
+    from app.bot.middlewares.membership import ChannelMembershipMiddleware
+
+    dp.update.outer_middleware(ChannelMembershipMiddleware())
+
     dp.update.outer_middleware(DatabaseMiddleware())
     dp.update.outer_middleware(UserMiddleware())
     dp.update.outer_middleware(I18nMiddleware())
-    # Membership guard: runs after lang/db_user are set, before throttling
-    # and the admin bypass (admins are exempt in the middleware itself).
-    from app.bot.middlewares.membership import ChannelMembershipMiddleware
-    dp.update.outer_middleware(ChannelMembershipMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(MaintenanceMiddleware())

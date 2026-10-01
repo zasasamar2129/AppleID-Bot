@@ -67,7 +67,7 @@ async def process_broadcasts_job() -> int:
         )
         claim = await session.execute(
             update(Broadcast)
-            .where(Broadcast.id == eligible)
+            .where(Broadcast.id == eligible.scalar_subquery())
             .values(status="in_progress", started_at=now)
             .returning(Broadcast.id)
         )

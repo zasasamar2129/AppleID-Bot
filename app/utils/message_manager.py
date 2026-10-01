@@ -150,13 +150,24 @@ class MessageCleanupService:
                         logger.warning(f"Edit of screen in chat {chat_id} failed: {e}")
 
         await cls._delete_old_ui_messages(chat_id)
+        logger.info("show_screen: attempting to send to chat %s", chat_id)
 
-        sent = await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode=parse_mode,
-        )
+        try:
+            sent = await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+            )
+            logger.info("show_screen: successfully sent to chat %s, msg_id=%s", chat_id, sent.message_id)
+        except TelegramBadRequest as e:
+            # e.g. chat not found, bot blocked, message too long.
+            logger.warning("show_screen send failed for chat %s: %s", chat_id, e.message)
+            raise
+        except Exception:
+            logger.exception("Unexpected show_screen send failure for chat %s", chat_id)
+            raise
+
         msg_type = MessageType.SYSTEM if protected else MessageType.UI
         await cls._set_last_ui_id(chat_id, sent.message_id)
         await cls._register_message(chat_id, sent.message_id, msg_type)

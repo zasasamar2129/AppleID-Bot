@@ -1,6 +1,6 @@
 {
-  "channel.access_required": "🔒 دسترسی محدود است\n\nبرای استفاده از این ربات ابتدا باید در کانال ما عضو شوید.\n\n📢 کانال ما:\n@mobilemeisam2\n\nبعد از عضویت، روی «✅ بررسی عضویت» بزنید.",
-  "channel.join": "📢 عضویت در کانال",
+  "channel.access_required": "👋 سلام! برای استفاده از امکانات ربات، ابتدا باید در کانال <a href=\"https://t.me/mobilemeisam2\">Avalsim</a> عضو باشید.\n\nبا عضویت در کانال، از آخرین اخبار و آموزش‌ها باخبر می‌شوید:\n\nپس از عضویت، روی دکمه زیر بزنید تا دسترسی شما فعال شود:",
+  "channel.join": "📢 عضویت در Avalsim",
   "channel.check_membership": "✅ بررسی عضویت",
   "channel.not_member": "❌ هنوز عضو کانال نشدی.\n\nاول وارد کانال شو و بعد دوباره «بررسی عضویت» رو بزن.",
   "channel.verified": "✅ عضویت شما تأیید شد.",
@@ -477,7 +477,7 @@
   "unlock.enter_apple_id_email": "📧 آدرس ایمیل Apple ID خود را وارد کنید:",
   "unlock.invalid_email": "⚠️ ایمیل معتبر نیست.\n\nلطفاً ایمیل متصل به این Apple ID را دوباره ارسال کنید.",
   "unlock.enter_phone_number": "📱 شماره تماس خود را وارد کنید:",
-  "unlock.invalid_phone": "شماره تماس نامعتبر است. دوباره تلاش کنید.",
+  "unlock.invalid_phone": "⚠️ شماره تماس معتبر نیست.\n\nلطفاً شماره تماس معتبر خود را دوباره ارسال کنید.",
   "unlock.has_credentials": "🔑 آیا به این Apple ID دسترسی دارید؟\n(مانند رمز عبور، سوالات امنیتی و …)",
   "unlock.yes": "بله",
   "unlock.no": "خیر",
@@ -505,7 +505,6 @@
   "unlock.other_locked_question": "📱 آیا آیفون دیگری هم با این Apple ID قفل شده است؟",
   "unlock.additional_info": "📝 اطلاعات تکمیلی\n\nاگر توضیح، نکته یا اطلاعات دیگری درباره دستگاه یا Apple ID دارید، اینجا ارسال کنید.\n\nاگر موردی ندارید، «رد کردن» را بزنید.",
   "unlock.enter_phone": "📞 شماره تماس خود را وارد کنید:\n\nتا برای هماهنگی و پیگیری بتوانیم با شما در ارتباط باشیم.\n\nمثال: 09123456789",
-  "unlock.invalid_phone": "⚠️ شماره تماس معتبر نیست.\n\nلطفاً شماره تماس معتبر خود را دوباره ارسال کنید.",
   "unlock.summary_phone": "شماره تماس",
   "unlock.edit_phone": "شماره تماس",
   "unlock.invalid_imei": "⚠️ IMEI معتبر نیست.\n\nلطفاً IMEI ۱۵ رقمی آیفون را دوباره ارسال کنید.",
@@ -596,5 +595,10 @@
   "unlock_admin.payment.paid": "پرداخت شده",
   "unlock_admin.payment.failed": "ناموفق",
   "unlock.has_access": "دسترسی دارم",
-  "unlock.no_access": "دسترسی ندارم"
+  "unlock.no_access": "دسترسی ندارم",
+  "admin.support.list_title": "🏧 تیکت‌های پشتیبانی",
+  "admin.support.no_tickets": "تیکتی وجود ندارد.",
+  "admin.support.enter_reply": "پاسخ خود را وارد کنید:",
+  "admin.support.reply_sent": "پاسخ ارسال شد.",
+  "admin.support.no_admin_record": "برای حساب شما رکورد مدیریت یافت نشد."
 }

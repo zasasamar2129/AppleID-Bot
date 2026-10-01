@@ -70,27 +70,32 @@ class ChannelMembershipService:
             member = await self.bot.get_chat_member(
                 chat_id=settings.required_channel_id,
                 user_id=user_id,
+                request_timeout=5,
             )
             status = getattr(member, "status", None)
             return status in ACCEPTED_STATUSES
         except TelegramBadRequest as e:
-            # e.g. user not found in chat, bot lacks access, channel invalid
-            logger.warning(
-                "Membership check failed (bad request) for user %s: %s",
+            # e.g. user not found in chat, bot lacks access, channel invalid.
+            # This is usually CONFIGURATION, not the user's fault — log louder so
+            # an operator can tell it apart from "user simply hasn't joined".
+            logger.error(
+                "Membership check BAD REQUEST for user %s — the bot may lack access "
+                "to the channel, or the channel id is wrong: %s",
                 user_id,
                 e.message,
             )
             return False
         except TelegramAPIError as e:
-            logger.warning(
-                "Membership check failed (API) for user %s: %s",
+            logger.error(
+                "Membership check API error for user %s (transient Telegram failure): %s",
                 user_id,
                 e.message,
             )
             return False
         except Exception as e:  # noqa: BLE001 - network/timeout etc, fail closed
-            logger.warning(
-                "Membership check errored for user %s: %s",
+            logger.error(
+                "Membership check errored for user %s: %s (failing closed — user "
+                "will be shown the join gate)",
                 user_id,
                 type(e).__name__,
             )

@@ -66,7 +66,10 @@ async def admin_dashboard(callback: CallbackQuery, session: AsyncSession, lang="
 @router.callback_query(F.data == "admin:close", IsAdmin())
 async def admin_close(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await MessageCleanupService.close(callback.message.chat.id)
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logger.debug("Failed to delete admin panel message: %s", e)
     await callback.answer("Closed")
 
 
