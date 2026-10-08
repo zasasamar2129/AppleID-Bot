@@ -23,8 +23,11 @@ class PaymentRepository:
     async def get_by_id(self, payment_id: int) -> Payment | None:
         return await self.session.get(Payment, payment_id)
 
-    async def get_by_order(self, order_id: int) -> Payment | None:
+    async def get_by_order(self, order_id: int, status: PaymentStatus | None = None) -> Payment | None:
         stmt = select(Payment).where(Payment.order_id == order_id)
+        if status:
+            stmt = stmt.where(Payment.status == status)
+        stmt = stmt.order_by(Payment.created_at.desc()).limit(1)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -33,7 +36,26 @@ class PaymentRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def update_status(self, payment_id: int, new_status: PaymentStatus, extra: dict | None = None) -> Payment | None:
+    async def get_by_tracking_code(self, tracking_code: str) -> Payment | None:
+        """Locate a payment from the gateway's return URL (ResNum)."""
+        if not tracking_code:
+            return None
+        stmt = select(Payment).where(Payment.tracking_code == str(tracking_code))
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_for_update(self, payment_id: int) -> Payment | None:
+        """Row-lock a payment for the duration of the surrounding transaction.
+
+        This is what makes concurrent completion attempts (duplicate callback,
+        reconciliation racing a user click, admin retry) serialize instead of
+        both crediting the wallet.
+        """
+        stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def update_status(self, payment_id: int, new_status: PaymentStatus, extra: dict | None = None, commit: bool = True) -> Payment | None:
         payment = await self.get_by_id(payment_id)
         if not payment:
             return None
@@ -44,8 +66,9 @@ class PaymentRepository:
         if new_status == PaymentStatus.PAID:
             payment.verified_at = datetime.utcnow()
         payment.updated_at = datetime.utcnow()
-        await self.session.commit()
-        await self.session.refresh(payment)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(payment)
         return payment
 
     async def get_pending_verification(self) -> list[Payment]:

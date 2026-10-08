@@ -20,7 +20,7 @@ from app.services.coupon_service import CouponService
 from app.services.inventory_service import InventoryService
 from app.services.notification_service import NotificationService
 from app.services.order_service import OrderService
-from app.services.payment_service import PaymentService
+from app.services.payment_service import PaymentError, PaymentService
 from app.services.settings_service import SettingsService
 from app.states.payment import CardToCardStates
 from app.states.purchase import PurchaseStates
@@ -167,24 +167,72 @@ async def online_payment(callback: CallbackQuery, state: FSMContext, session: As
         await callback.answer(get_text("errors.order_not_found", lang), show_alert=True)
         return
     if not settings.is_online_payment_configured or not await is_payment_method_enabled(session, "payment_online_enabled"):
-        await callback.answer(get_text("errors.payment_unavailable", lang), show_alert=True)
+        await callback.answer(get_text("payment.gateway_unavailable", lang), show_alert=True)
         return
+
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
-    if not order:
-        await callback.answer(get_text("errors.order_not_found", lang), show_alert=True)
+    if not order or order.user_id != db_user.id:
+        await callback.answer(get_text("errors.not_found", lang), show_alert=True)
         return
+
+    # Idempotency: never let a user mint attempt A/B/C for one order.
+    if order.status == OrderStatus.PAID:
+        await callback.answer(get_text("payment.already_paid", lang), show_alert=True)
+        return
+
     payment_service = PaymentService(session)
-    await payment_service.create_payment(
-        order_id=order_id,
-        user_id=db_user.id,
-        method=PaymentMethod.ONLINE,
-        amount=order.final_price,
-        currency=order.currency,
-    )
-    await callback.message.edit_text(get_text("payment.online_unavailable", lang))
+    existing = await payment_service.find_open_online_payment(db_user.id, order.id)
+    if existing:
+        if existing.authority and existing.status == PaymentStatus.PENDING_VERIFICATION:
+            # A token is already out there — re-offer it instead of burning a
+            # second attempt the user did not ask for.
+            gateway_data = {"url": settings.sep_payment_url or "", "token": existing.authority}
+            await _send_gateway_button(callback, existing, gateway_data, order, lang)
+            await callback.answer()
+            return
+        await callback.answer(get_text("payment.already_pending", lang), show_alert=True)
+        return
+
+    try:
+        payment, gateway_data = await payment_service.create_online_payment(
+            user_id=db_user.id,
+            amount_toman=order.final_price,
+            order_id=order.id,
+            currency=order.currency,
+        )
+    except PaymentError as exc:
+        await callback.message.edit_text(get_text("payment.gateway_unavailable", lang))
+        await state.clear()
+        await callback.answer()
+        logger.warning("online payment refused for order=%s: %s", order.id, exc)
+        return
+
+    await _send_gateway_button(callback, payment, gateway_data, order, lang)
     await state.clear()
     await callback.answer()
+
+
+async def _send_gateway_button(callback, payment, gateway_data, order, lang) -> None:
+    """Show the pay button. Opening the bank page needs no server of ours."""
+    token = gateway_data.get("token") or payment.authority
+    base_url = gateway_data.get("url") or settings.sep_payment_url
+    kb = InlineKeyboardBuilder()
+    if token and base_url:
+        # SEP accepts the token as a query parameter on its payment page.
+        sep_url = f"{base_url}?Token={token}&GetMethod=true"
+        kb.button(text=get_text("payment.pay_button", lang), url=sep_url)
+    kb.button(text=get_text("common.cancel", lang), callback_data="menu:main")
+    kb.adjust(1)
+
+    text = (
+        f"💳 {get_text('payment.online_title', lang)}\n\n"
+        f"🧾 {get_text('orders.order', lang, order_id=order.id)}\n"
+        f"💰 {get_text('payment.amount_due', lang, amount=format_price(order.final_price, lang))}\n"
+        f"🏦 {get_text('payment.bank', lang)}: {get_text('payment.saman_bank', lang)}\n\n"
+        f"{get_text('payment.online_instruction', lang)}"
+    )
+    await callback.message.edit_text(text, reply_markup=kb.as_markup())
 
 
 @router.callback_query(F.data == "pay:wallet")

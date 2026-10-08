@@ -24,6 +24,10 @@ class WalletService:
 
     async def deposit(self, user_id: int, amount: Decimal, txn_type: WalletTransactionType = WalletTransactionType.DEPOSIT, reference_id: str | None = None, description: str | None = None) -> Decimal:
         wallet = await self.wallet_repo.get_or_create(user_id)
+        if reference_id:
+            existing = await self.wallet_repo.get_transaction_by_reference(reference_id)
+            if existing:
+                return wallet.balance
         wallet.balance += amount
         await self.wallet_repo.update_balance(wallet.id, wallet.balance)
         await self.wallet_repo.add_transaction(wallet.id, txn_type, amount, wallet.balance, reference_id=reference_id, description=description)

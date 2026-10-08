@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -53,10 +53,24 @@ class InventoryRepository:
         if not inv or inv.status != InventoryStatus.AVAILABLE:
             return None
         now = datetime.utcnow()
-        inv.status = InventoryStatus.RESERVED
-        inv.reserved_at = now
-        inv.reservation_expires_at = now + timedelta(seconds=reservation_seconds)
-        inv.updated_at = now
+        # Conditional UPDATE: only one concurrent caller can flip AVAILABLE ->
+        # RESERVED, so two users never claim the same Apple ID.
+        result = await self.session.execute(
+            update(Inventory)
+            .where(
+                Inventory.id == inventory_id,
+                Inventory.status == InventoryStatus.AVAILABLE,
+            )
+            .values(
+                status=InventoryStatus.RESERVED,
+                reserved_at=now,
+                reservation_expires_at=now + timedelta(seconds=reservation_seconds),
+                updated_at=now,
+            )
+        )
+        if result.rowcount == 0:
+            await self.session.rollback()
+            return None
         await self.session.commit()
         await self.session.refresh(inv)
         return inv

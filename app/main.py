@@ -31,6 +31,9 @@ class ColoredFormatter(logging.Formatter):
         return f"{color}{message}{self.RESET}"
 
 
+from app.utils.logger_handler import RedisLoggingHandler
+from app.bot.bot import bot, dp, redis_client
+
 # Configure logging
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(ColoredFormatter(
@@ -40,6 +43,12 @@ handler.setFormatter(ColoredFormatter(
 root_logger = logging.getLogger()
 root_logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
 root_logger.addHandler(handler)
+
+# Add Redis and Admin Alerting Handler
+redis_handler = RedisLoggingHandler(redis_client, bot, settings.admin_ids_list)
+redis_handler.setLevel(logging.INFO)
+redis_handler.setFormatter(logging.Formatter("%(message)s"))
+root_logger.addHandler(redis_handler)
 
 # Suppress noisy loggers
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
