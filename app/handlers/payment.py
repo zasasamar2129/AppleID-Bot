@@ -204,13 +204,19 @@ async def online_payment(callback: CallbackQuery, state: FSMContext, session: As
     except PaymentError as exc:
         await callback.message.edit_text(get_text("payment.gateway_unavailable", lang))
         await state.clear()
-        await callback.answer()
+        try:
+            await callback.answer()
+        except Exception:
+            pass
         logger.warning("online payment refused for order=%s: %s", order.id, exc)
         return
 
     await _send_gateway_button(callback, payment, gateway_data, order, lang)
     await state.clear()
-    await callback.answer()
+    try:
+        await callback.answer()
+    except Exception:
+        pass
 
 
 async def _send_gateway_button(callback, payment, gateway_data, order, lang) -> None:

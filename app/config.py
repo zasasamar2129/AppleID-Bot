@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     payment_callback_secret: str | None = None
     online_payment_enabled: bool = True
 
+    # Payment Bridge (to Iran VPS)
+    payment_bridge_url: str | None = None
+    payment_bridge_api_key: str | None = None
+
     # SEP Payment
     sep_enabled: bool = False
     sep_merchant_id: str | None = None
@@ -127,9 +131,9 @@ class Settings(BaseSettings):
 
     @property
     def is_online_payment_configured(self) -> bool:
-        # Check for custom API or SEP
+        # Check for bridge or SEP (direct or bridged)
         return bool(
-            (self.payment_api_base_url and self.payment_api_key) or
+            (self.payment_bridge_url and self.payment_bridge_api_key) or
             (self.sep_enabled and self.sep_merchant_id and self.sep_terminal_id)
         )
 

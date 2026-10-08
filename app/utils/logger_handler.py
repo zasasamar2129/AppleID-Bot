@@ -23,14 +23,16 @@ class RedisLoggingHandler(logging.Handler):
             "message": self.format(record),
         }
 
-        # Async calls aren't allowed in emit, so we schedule them.
-        # This handler runs in the main thread (where logging happens),
-        # but we need to push to redis and potentially alert.
-        # For simplicity in this bot architecture, we'll try to use the running loop.
-        import asyncio
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(self._process_log(log_entry))
+        try:
+            # Safely get the running event loop.
+            # During shutdown, this might raise a RuntimeError.
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                loop.create_task(self._process_log(log_entry))
+        except (RuntimeError, AttributeError):
+            # No running loop, bot is shutting down.
+            # Fallback to standard output so we don't crash.
+            print(f"[{log_entry['level']}] {log_entry['message']}")
 
     async def _process_log(self, log_entry: dict[str, Any]):
         try:
