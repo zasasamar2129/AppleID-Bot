@@ -40,6 +40,26 @@ class Settings(BaseSettings):
     payment_api_secret: str | None = None
     payment_callback_secret: str | None = None
     online_payment_enabled: bool = True
+
+    # Payment Bridge (to Iran VPS)
+    payment_bridge_url: str | None = None
+    payment_bridge_api_key: str | None = None
+
+    # SEP Payment
+    sep_enabled: bool = False
+    sep_merchant_id: str | None = None
+    sep_terminal_id: str | None = None
+    sep_username: str | None = None
+    sep_password: str | None = None
+    sep_callback_url: str | None = None
+    # Endpoint overrides; unset means "use the reference package's default".
+    sep_api_url: str | None = None
+    sep_payment_url: str | None = None
+    sep_verify_url: str | None = None
+    # How long a payment may sit open at the bank before it stops being
+    # treated as recoverable by reconciliation.
+    payment_ttl_minutes: int = 30
+
     card_to_card_enabled: bool = True
     card_to_card_number: str | None = None
     card_to_card_holder: str | None = None
@@ -111,7 +131,11 @@ class Settings(BaseSettings):
 
     @property
     def is_online_payment_configured(self) -> bool:
-        return bool(self.payment_api_base_url and self.payment_api_key)
+        # Check for bridge or SEP (direct or bridged)
+        return bool(
+            (self.payment_bridge_url and self.payment_bridge_api_key) or
+            (self.sep_enabled and self.sep_merchant_id and self.sep_terminal_id)
+        )
 
 
 settings = Settings()

@@ -36,7 +36,7 @@ class OrderRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def update_status(self, order_id: int, new_status: OrderStatus, extra: dict | None = None) -> Order | None:
+    async def update_status(self, order_id: int, new_status: OrderStatus, extra: dict | None = None, commit: bool = True) -> Order | None:
         order = await self.get_by_id(order_id)
         if not order:
             return None
@@ -45,8 +45,9 @@ class OrderRepository:
             for key, value in extra.items():
                 setattr(order, key, value)
         order.updated_at = datetime.utcnow()
-        await self.session.commit()
-        await self.session.refresh(order)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(order)
         return order
 
     async def set_payment_method(self, order_id: int, method: PaymentMethod) -> None:

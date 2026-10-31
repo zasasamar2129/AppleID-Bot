@@ -27,13 +27,14 @@ class WalletRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def update_balance(self, wallet_id: int, new_balance: Decimal) -> None:
+    async def update_balance(self, wallet_id: int, new_balance: Decimal, commit: bool = True) -> None:
         wallet = await self.session.get(Wallet, wallet_id)
         if wallet:
             wallet.balance = new_balance
-            await self.session.commit()
+            if commit:
+                await self.session.commit()
 
-    async def add_transaction(self, wallet_id: int, txn_type: WalletTransactionType, amount: Decimal, balance_after: Decimal, reference_id: str | None = None, description: str | None = None) -> WalletTransaction:
+    async def add_transaction(self, wallet_id: int, txn_type: WalletTransactionType, amount: Decimal, balance_after: Decimal, reference_id: str | None = None, description: str | None = None, commit: bool = True) -> WalletTransaction:
         txn = WalletTransaction(
             wallet_id=wallet_id,
             type=txn_type,
@@ -43,9 +44,15 @@ class WalletRepository:
             description=description,
         )
         self.session.add(txn)
-        await self.session.commit()
-        await self.session.refresh(txn)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(txn)
         return txn
+
+    async def get_transaction_by_reference(self, reference_id: str) -> WalletTransaction | None:
+        stmt = select(WalletTransaction).where(WalletTransaction.reference_id == reference_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_transactions(self, wallet_id: int, limit: int = 20, offset: int = 0) -> list[WalletTransaction]:
         stmt = select(WalletTransaction).where(WalletTransaction.wallet_id == wallet_id).order_by(WalletTransaction.created_at.desc()).limit(limit).offset(offset)

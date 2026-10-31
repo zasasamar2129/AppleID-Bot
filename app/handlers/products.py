@@ -332,7 +332,7 @@ async def review_confirm(callback: CallbackQuery, state: FSMContext, session: As
             "last_name": data.get("last_name"),
             "email": data.get("email"),
             "phone": data.get("phone"),
-            "password": data.get("password"),
+            "email_password": data.get("password"),
         },
         inventory_id=None,
     )

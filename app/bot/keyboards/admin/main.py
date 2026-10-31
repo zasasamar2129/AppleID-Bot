@@ -47,6 +47,13 @@ def admin_main_keyboard(lang: str = "fa") -> InlineKeyboardMarkup:
         style="primary"
     ))
 
+    # Bot Logs (full width)
+    kb.add(InlineKeyboardButton(
+        text="📜 Bot Logs",
+        callback_data="admin:logs",
+        style="primary"
+    ))
+
     # Back and Close stacked vertically
     kb.add(InlineKeyboardButton(
         text=get_text("common.back", lang),
@@ -59,6 +66,6 @@ def admin_main_keyboard(lang: str = "fa") -> InlineKeyboardMarkup:
     ))
 
     # Layout: two columns for sections, then single column for audit,
-    # scheduler health, back, close
-    kb.adjust(2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1)
+    # scheduler health, logs, back, close
+    kb.adjust(2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1)
     return kb.as_markup()

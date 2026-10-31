@@ -62,7 +62,54 @@ async def admin_dashboard(callback: CallbackQuery, session: AsyncSession, lang="
     await callback.answer()
 
 
-# Close handler for admin panel
+import json
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton
+from app.bot.bot import redis_client
+
+@router.callback_query(F.data == "admin:logs", IsAdmin())
+async def admin_logs(callback: CallbackQuery, lang="fa"):
+    try:
+        logs_raw = await redis_client.lrange("bot:logs", 0, 19)
+        if not logs_raw:
+            await callback.message.edit_text(
+                "📜 *Bot Logs*\n\nNo logs recorded yet.",
+                parse_mode="Markdown",
+                reply_markup=admin_logs_keyboard()
+            )
+            await callback.answer()
+            return
+
+        text = "📜 *Recent Bot Logs (Top 20)*\n\n"
+        for log_str in reversed(logs_raw):
+            try:
+                log = json.loads(log_str)
+                level_emoji = "🟢" if log["level"] == "INFO" else ("🟡" if log["level"] == "WARNING" else "🔴")
+                time_str = log['timestamp'].split('T')[1].split('.')[0]
+                text += f"{level_emoji} `[{time_str}]` *{log['level']}* ({log['name']}):\n```{log['message']}```\n\n"
+            except Exception:
+                pass
+
+        if len(text) > 4000:
+            text = text[:3900] + "\n\n..._truncated due to message size limit_"
+
+        await callback.message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=admin_logs_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch logs: {e}")
+        await callback.answer("Error fetching logs", show_alert=True)
+
+    await callback.answer()
+
+def admin_logs_keyboard() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text="🔄 Refresh", callback_data="admin:logs"))
+    kb.add(InlineKeyboardButton(text="⬅️ Back", callback_data="admin:main"))
+    kb.adjust(1)
+    return kb.as_markup()
 @router.callback_query(F.data == "admin:close", IsAdmin())
 async def admin_close(callback: CallbackQuery, state: FSMContext):
     await state.clear()
