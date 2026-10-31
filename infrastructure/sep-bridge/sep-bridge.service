@@ -1,0 +1,19 @@
+[Unit]
+Description=Iran SEP Bridge FastAPI Service
+After=network.target
+
+[Service]
+User=sepbridge
+Group=sepbridge
+WorkingDirectory=/opt/sep-bridge
+EnvironmentFile=/opt/sep-bridge/.env
+ExecStart=/opt/sep-bridge/venv/bin/uvicorn bridge_app.main:app --host ${BRIDGE_HOST} --port ${BRIDGE_PORT}
+
+Restart=always
+RestartSec=5s
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

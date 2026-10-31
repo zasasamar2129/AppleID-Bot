@@ -10,6 +10,8 @@ class PurchaseStates(StatesGroup):
     COLLECT_LAST_NAME = State()
     COLLECT_EMAIL_ASK = State()
     COLLECT_EMAIL = State()
+    COLLECT_PASSWORD_ASK = State()
+    COLLECT_PASSWORD = State()
     COLLECT_PHONE = State()
     REVIEW_ORDER = State()
     SELECT_COUPON = State()

@@ -233,6 +233,40 @@ async def email(message: Message, state: FSMContext, lang="fa"):
         return
     await state.update_data(email=email)
     await message.delete()
+
+    from aiogram.types import InlineKeyboardButton
+    from app.bot.keyboards.common import cancel_keyboard
+
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text=get_text("common.skip", lang), callback_data="password:skip"))
+    kb.add(InlineKeyboardButton(text=get_text("common.cancel", lang), callback_data="menu:main"))
+    kb.adjust(1)
+
+    await MessageCleanupService.send_temporary(
+        message.chat.id,
+        get_text("products.personal_password", lang),
+        reply_markup=kb.as_markup(),
+    )
+    await state.set_state(PurchaseStates.COLLECT_PASSWORD)
+
+
+@router.callback_query(PurchaseStates.COLLECT_PASSWORD, F.data == "password:skip")
+async def password_skip(callback: CallbackQuery, state: FSMContext, lang="fa"):
+    await state.update_data(password=None)
+    await MessageCleanupService.send_temporary(
+        callback.message.chat.id,
+        get_text("products.personal_phone", lang),
+        reply_markup=cancel_keyboard("menu:main", lang),
+    )
+    await state.set_state(PurchaseStates.COLLECT_PHONE)
+    await callback.answer()
+
+
+@router.message(PurchaseStates.COLLECT_PASSWORD, F.text)
+async def password_collect(message: Message, state: FSMContext, lang="fa"):
+    password = message.text.strip()
+    await state.update_data(password=password)
+    await message.delete()
     await MessageCleanupService.send_temporary(
         message.chat.id,
         get_text("products.personal_phone", lang),
@@ -255,6 +289,7 @@ async def phone(message: Message, state: FSMContext, lang="fa"):
         f"👤 {get_text('products.first_name', lang)}: {data['first_name']}\n"
         f"👤 {get_text('products.last_name', lang)}: {data['last_name']}\n"
         f"📧 {get_text('products.email', lang)}: {data.get('email') or '—'}\n"
+        f"🔐 {get_text('unlock.summary_password', lang)}: {data.get('password') or '⏭ ' + get_text('unlock.summary_password_skipped', lang)}\n"
         f"📱 {get_text('products.phone', lang)}: {data['phone']}\n"
     )
     kb = InlineKeyboardBuilder()
@@ -297,6 +332,7 @@ async def review_confirm(callback: CallbackQuery, state: FSMContext, session: As
             "last_name": data.get("last_name"),
             "email": data.get("email"),
             "phone": data.get("phone"),
+            "password": data.get("password"),
         },
         inventory_id=None,
     )
